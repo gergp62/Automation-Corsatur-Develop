@@ -1,4 +1,3 @@
-import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -12,7 +11,7 @@ class InventarioPage(BasePage):
     """
 
     # =========================================================================
-    # LOCALIZADORES (Mapeados según el comportamiento real del DOM de MUI)
+    # LOCALIZADORES (Mapeados según el documento de requerimientos SIIT_CU002)
     # =========================================================================
     
     # --- Vista Pública, Buscador y Solapas ---
@@ -22,17 +21,14 @@ class InventarioPage(BasePage):
     BUSCADOR_TEXTO = (By.XPATH, "//input[@id='search-input' or contains(@placeholder, 'Buscar')]")
     BOTON_BUSCAR = (By.CSS_SELECTOR, "button.search-button")
     
-    # --- Modal de Filtros (Estructura de Comboboxes acotada al contenedor del Dialog) ---
+    # --- Modal de Filtros (Estructura Mixta Material-UI de HU001) ---
     BOTON_ABRIR_FILTROS = (By.XPATH, "//button[contains(., 'Filtros')]")
     BOTON_APLICAR_FILTROS = (By.XPATH, "//button[contains(., 'Aplicar filtros') or contains(., 'Aplicar')]")
     
-    # Contenedor genérico del modal/drawer flotante de Material-UI para delimitar las búsquedas
-    MODAL_FILTROS = "//div[@role='dialog' or contains(@class, 'MuiDialog-') or contains(@class, 'MuiModal-') or contains(@class, 'MuiDrawer-')]"
-    
-    # Identificamos las cajas de los combos basándonos estrictamente en su orden dentro del Modal activo
-    COMBO_DEPARTAMENTO = (By.XPATH, f"({MODAL_FILTROS}//div[@role='combobox'])[1]")
-    COMBO_MUNICIPIO = (By.XPATH, f"({MODAL_FILTROS}//div[@role='combobox'])[2]")
-    COMBO_DISTRITO = (By.XPATH, f"({MODAL_FILTROS}//div[@role='combobox'])[3]")
+    # Selectores del Modal - Tipo Dropdown (Párrafos)
+    COMBO_DEPARTAMENTO = (By.XPATH, "//p[contains(text(), 'Seleccionar departamento')]")
+    COMBO_MUNICIPIO = (By.XPATH, "//p[contains(text(), 'Seleccionar municipio')]")
+    COMBO_DISTRITO = (By.XPATH, "//p[contains(text(), 'Seleccionar distrito')]")
     
     # Localizador del contenedor principal del documento para lecturas globales de texto
     CUERPO_PAGINA = (By.TAG_NAME, "body")
@@ -41,6 +37,9 @@ class InventarioPage(BasePage):
     
     # --- Acciones de Grilla / Home ---
     BOTON_REGISTRAR_EMPRESA = (By.XPATH, "//button[contains(text(), 'Agregar empresa') or contains(text(), 'Registrar empresa')]")
+    
+    # Captura el primer botón de Material-UI que contenga exactamente el texto "Ver"
+    BOTON_VER_DETALLE_PRIMERO = (By.XPATH, "(//button[contains(@class, 'MuiButton-root') and contains(text(), 'Ver')])[1]")
     
     # --- Formulario de Registro: 1) Personería ---
     RADIO_PERSONERIA_JURIDICA = (By.XPATH, "//input[@value='Jurídica']")
@@ -81,95 +80,32 @@ class InventarioPage(BasePage):
         """Ingresa el texto en el buscador principal para filtrado dinámico."""
         self.escribir(self.BUSCADOR_TEXTO, texto)
 
-    def filtrar_con_filtros_avanzados(self, departamento=None, municipio=None, distrito=None, rubro=None, categoria=None, tipo=None, clasificacion=None):
-        """Abre el modal, procesa los Chips jerárquicos primero y luego ejecuta los dropdowns de ubicación."""
+    def filtrar_con_filtros_avanzados(self, departamento=None, municipio=None, distrito=None, rubro=None, clasificacion=None):
+        """Abre el modal de filtros y combina dropdowns y chips seleccionables."""
         self.hacer_clic(self.BOTON_ABRIR_FILTROS)
-        time.sleep(0.6)  # Sincronización para la apertura del modal animado
         
-        # --- 1. SELECCIÓN DE CHIPS (Categorías, Tipos, Clasificaciones) ---
-        # Usamos normalize-space y una estrategia doble de click para asegurar el cambio de estado en React
-        if rubro:
-            CHIP_RUBRO = (By.XPATH, f"//*[contains(@class, 'MuiChip-label') and (normalize-space()='{rubro}' or contains(normalize-space(), '{rubro}'))]")
-            elemento_rubro = self.wait.until(EC.element_to_be_clickable(CHIP_RUBRO))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_rubro)
-            time.sleep(0.2)
-            try:
-                elemento_rubro.click()
-            except Exception:
-                self.driver.execute_script("arguments[0].click();", elemento_rubro)
-            time.sleep(0.4)
-
-        if categoria:
-            CHIP_CAT = (By.XPATH, f"//*[contains(@class, 'MuiChip-label') and (normalize-space()='{categoria}' or contains(normalize-space(), '{categoria}'))]")
-            elemento_cat = self.wait.until(EC.element_to_be_clickable(CHIP_CAT))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_cat)
-            time.sleep(0.2)
-            try:
-                elemento_cat.click()
-            except Exception:
-                self.driver.execute_script("arguments[0].click();", elemento_cat)
-            time.sleep(0.4)
-
-        if tipo:
-            CHIP_TIPO = (By.XPATH, f"//*[contains(@class, 'MuiChip-label') and (normalize-space()='{tipo}' or contains(normalize-space(), '{tipo}'))]")
-            elemento_tipo = self.wait.until(EC.element_to_be_clickable(CHIP_TIPO))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_tipo)
-            time.sleep(0.2)
-            try:
-                elemento_tipo.click()
-            except Exception:
-                self.driver.execute_script("arguments[0].click();", elemento_tipo)
-            time.sleep(0.4)
-            
-        if clasificacion:
-            CHIP_CLASIFICACION = (By.XPATH, f"//*[contains(@class, 'MuiChip-label') and (normalize-space()='{clasificacion}' or contains(normalize-space(), '{clasificacion}'))]")
-            elemento_clasi = self.wait.until(EC.element_to_be_clickable(CHIP_CLASIFICACION))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_clasi)
-            time.sleep(0.2)
-            try:
-                elemento_clasi.click()
-            except Exception:
-                self.driver.execute_script("arguments[0].click();", elemento_clasi)
-            time.sleep(0.4)
-
-        # --- 2. SELECCIÓN DE DROPDOWNS (Ubicación Geográfica) ---
-        # Forzamos scroll e interacción nativa (.click()) indispensable para activar el menú flotante en MUI
         if departamento:
-            elemento_combo_depto = self.wait.until(EC.element_to_be_clickable(self.COMBO_DEPARTAMENTO))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_combo_depto)
-            time.sleep(0.2)
-            elemento_combo_depto.click()  
-            time.sleep(0.5)
-            
-            # Ampliamos el Xpath de la opción para que soporte tanto 'li' como estructuras genéricas de Autocomplete/Select
-            OPCION_DEPTO = (By.XPATH, f"//ul[@role='listbox']//*[self::li or @role='option'][normalize-space()='{departamento}' or contains(normalize-space(), '{departamento}')]")
-            elemento_opcion_depto = self.wait.until(EC.element_to_be_clickable(OPCION_DEPTO))
-            elemento_opcion_depto.click()
-            time.sleep(1.2)  # Sincronización para la carga asincrónica de municipios
+            self.hacer_clic(self.COMBO_DEPARTAMENTO)
+            OPCION_DEPTO = (By.XPATH, f"//li[contains(text(), '{departamento}') or contains(., '{departamento}')]")
+            self.hacer_clic(OPCION_DEPTO)
 
         if municipio:
-            elemento_combo_muni = self.wait.until(EC.element_to_be_clickable(self.COMBO_MUNICIPIO))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_combo_muni)
-            time.sleep(0.2)
-            elemento_combo_muni.click()
-            time.sleep(0.5)
-            
-            OPCION_MUNI = (By.XPATH, f"//ul[@role='listbox']//*[self::li or @role='option'][normalize-space()='{municipio}' or contains(normalize-space(), '{municipio}')]")
-            elemento_opcion_muni = self.wait.until(EC.element_to_be_clickable(OPCION_MUNI))
-            elemento_opcion_muni.click()
-            time.sleep(1.2)  # Sincronización para la carga asincrónica de distritos
+            self.hacer_clic(self.COMBO_MUNICIPIO)
+            OPCION_MUNI = (By.XPATH, f"//li[contains(text(), '{municipio}') or contains(., '{municipio}')]")
+            self.hacer_clic(OPCION_MUNI)
             
         if distrito:
-            elemento_combo_dist = self.wait.until(EC.element_to_be_clickable(self.COMBO_DISTRITO))
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento_combo_dist)
-            time.sleep(0.2)
-            elemento_combo_dist.click()
-            time.sleep(0.5)
+            self.hacer_clic(self.COMBO_DISTRITO)
+            OPCION_DIST = (By.XPATH, f"//li[contains(text(), '{distrito}') or contains(., '{distrito}')]")
+            self.hacer_clic(OPCION_DIST)
             
-            OPCION_DIST = (By.XPATH, f"//ul[@role='listbox']//*[self::li or @role='option'][normalize-space()='{distrito}' or contains(normalize-space(), '{distrito}')]")
-            elemento_opcion_dist = self.wait.until(EC.element_to_be_clickable(OPCION_DIST))
-            elemento_opcion_dist.click()
-            time.sleep(0.5)
+        if rubro:
+            CHIP_RUBRO = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and text()='{rubro}']")
+            self.hacer_clic(CHIP_RUBRO)
+            
+        if clasificacion:
+            CHIP_CLASIFICACION = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and text()='{clasificacion}']")
+            self.hacer_clic(CHIP_CLASIFICACION)
             
         self.hacer_clic(self.BOTON_APLICAR_FILTROS)
 
@@ -186,6 +122,10 @@ class InventarioPage(BasePage):
     def obtener_texto_resultados(self) -> str:
         """Captura el texto visible en toda la pantalla para las aserciones de contenido."""
         return self.driver.find_element(*self.CUERPO_PAGINA).text
+
+    def ver_primer_detalle(self):
+        """Hace clic en el botón o ícono de 'Ver detalle' del primer registro del listado."""
+        self.hacer_clic(self.BOTON_VER_DETALLE_PRIMERO)
 
     def iniciar_registro_empresa(self):
         self.hacer_clic(self.BOTON_REGISTRAR_EMPRESA)

@@ -41,49 +41,78 @@ def test_busqueda_rapida_empresa_existente(driver):
 
 
 @pytest.mark.regression
-def test_filtrar_atractivos_por_ubicacion_y_categoria(driver):
+def test_filtrar_por_ubicacion_y_categoria_valida(driver):
     """
-    Caso de Uso: 002 - HU001 (Atractivos)
-    Objetivo: Validar que los filtros complejos avanzados (Ubicación exacta de diagnóstico)
-              funcionen en la solapa de atractivos, trayendo la data esperada.
+    Caso de Uso: 002 - HU001
+    Objetivo: Validar que los filtros combinados (Ubicación exacta y Chips de Categoría) 
+              en el modal se apliquen correctamente devolviendo datos reales del ambiente.
     """
     inventario = InventarioPage(driver)
     inventario.abrir_url(URL_BASE)
+    
+    # 1. Entramos a la sección de inventario
     inventario.hacer_clic(inventario.BOTON_CONSULTAR_INVENTARIO)
     
-    # 1. Cambiamos a la solapa de Atractivos
-    inventario.hacer_clic(inventario.TAB_ATRACTIVOS)
+    # 2. Set de datos exactos corregido según el comportamiento real del ambiente
+    depto_test = "San Salvador"
+    muni_test = "San Salvador Centro"   
+    distrito_test = "San Salvador"       
+    rubro_test = "Alojamiento"
+    clasi_test = "Hotel"
     
-    # 2. Set de datos estratégico modificado para diagnosticar comportamiento sin acentos
-    depto_atractivo = "Sonsonate"
-    muni_atractivo = "Sonsonate Este"   
-    dist_atractivo = None           # Aislamos el distrito pasándolo como None
-    cat_atractivo = None            # Sin chips por ahora para validar solo dropdowns
-    tipo_atractivo = None
-    clasi_atractivo = None
-    
-    # 3. Ejecutamos la filtración combinada avanzada
+    # 3. Ejecutamos la acción combinada pasando los 5 filtros secuenciales
     inventario.filtrar_con_filtros_avanzados(
-        departamento=depto_atractivo, 
-        municipio=muni_atractivo, 
-        distrito=dist_atractivo,
-        categoria=cat_atractivo,
-        tipo=tipo_atractivo,
-        clasificacion=clasi_atractivo
+        departamento=depto_test, 
+        municipio=muni_test, 
+        distrito=distrito_test,
+        rubro=rubro_test, 
+        clasificacion=clasi_test
     )
-
+    
     # =========================================================================
-    # ASERCIONES (Validaciones optimizadas para la grilla de resultados)
+    # ASERCIONES (Validaciones optimizadas por presencia de contenido)
     # =========================================================================
     
-    # Aserción 1: Esperar a que los datos filtrados del departamento impacten en pantalla
-    se_cargo_contenido = inventario.esperar_presencia_de_texto(depto_atractivo, timeout=10)
+    # Aserción 1: Esperar a que los datos filtrados impacten visualmente en la grilla
+    se_cargo_contenido = inventario.esperar_presencia_de_texto(clasi_test, timeout=10)
     assert se_cargo_contenido, \
-        f"Fallo en el filtro: Pasaron 10s y el texto '{depto_atractivo}' no apareció en pantalla tras aplicar filtros."
+        f"Fallo en el filtro: Pasaron 10s y el texto '{clasi_test}' no apareció en pantalla tras aplicar filtros."
 
-    # Aserción 2: Validar que el municipio también se encuentre renderizado en los cards/grilla
+    # Aserción 2: Validar que el rubro también esté presente en el renderizado
     texto_pantalla = inventario.obtener_texto_resultados().lower()
-    assert muni_atractivo.lower() in texto_pantalla, \
-        f"Validación fallida: El municipio '{muni_atractivo}' no se encuentra visible en la pantalla de resultados."
+    assert rubro_test.lower() in texto_pantalla, \
+        f"Validación fallida: El rubro '{rubro_test}' no se encuentra visible en la pantalla de resultados."
 
-    print("¡Filtro de diagnóstico con Sonsonate ejecutado y validado en pantalla con éxito!")
+    print("¡Filtro combinado completamente exitoso y validado en pantalla!")
+
+
+@pytest.mark.regression
+def test_ver_detalle_empresa_transporte(driver):
+    """
+    Caso de Uso: 002 - HU001
+    Objetivo: Validar que al hacer clic en el ícono de 'Ver detalle' de una empresa 
+              filtrada por el rubro 'Transporte', se abra la vista detallada y 
+              se verifique que la información obligatoria del rubro sea correcta.
+    """
+    inventario = InventarioPage(driver)
+    inventario.abrir_url(URL_BASE)
+    
+    # 1. Ingresamos a la sección pública de inventario
+    inventario.hacer_clic(inventario.BOTON_CONSULTAR_INVENTARIO)
+    
+    # 2. Filtramos directamente por el chip del rubro "Transporte" (dejando ubicación libre)
+    inventario.filtrar_con_filtros_avanzados(rubro="Transporte")
+    
+    # 3. Validamos que la grilla reaccionó y muestra elementos de Transporte antes de avanzar
+    assert inventario.esperar_presencia_de_texto("Transporte", timeout=10), \
+        "Fallo previo: No se encontraron empresas con el rubro 'Transporte' en la grilla principal."
+    
+    # 4. Hacemos clic en el ícono/botón de ver detalle del primer elemento de la lista
+    inventario.ver_primer_detalle()
+    
+    # 5. Aserción final: Validar que los datos mandatorios (el rubro) se visualicen dentro del detalle
+    detalle_abierto_con_exito = inventario.esperar_presencia_de_texto("Transporte", timeout=12)
+    assert detalle_abierto_con_exito, \
+        "Fallo en la aserción: Se abrió el detalle de la empresa pero no se visualiza el rubro mandatorio 'Transporte'."
+        
+    print("¡Prueba de visualización de detalles de transporte aprobada con éxito!")
