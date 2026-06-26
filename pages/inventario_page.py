@@ -1,6 +1,8 @@
+import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException
 from .base_page import BasePage
 
 class InventarioPage(BasePage):
@@ -38,8 +40,8 @@ class InventarioPage(BasePage):
     # --- Acciones de Grilla / Home ---
     BOTON_REGISTRAR_EMPRESA = (By.XPATH, "//button[contains(text(), 'Agregar empresa') or contains(text(), 'Registrar empresa')]")
     
-    # Captura el primer botón de Material-UI que contenga exactamente el texto "Ver"
-    BOTON_VER_DETALLE_PRIMERO = (By.XPATH, "(//button[contains(@class, 'MuiButton-root') and contains(text(), 'Ver')])[1]")
+    # Localizador todoterreno para el botón de detalles
+    BOTON_VER_DETALLE_PRIMERO = (By.XPATH, "(//button[contains(@class, 'MuiButton-root') or contains(@class, 'MuiIconButton-root')][contains(., 'Ver') or contains(., 'ver') or contains(@aria-label, 'Ver') or contains(@aria-label, 'ver') or contains(@title, 'Ver') or contains(@title, 'ver')])[1]")
     
     # --- Formulario de Registro: 1) Personería ---
     RADIO_PERSONERIA_JURIDICA = (By.XPATH, "//input[@value='Jurídica']")
@@ -73,6 +75,32 @@ class InventarioPage(BasePage):
     BOTON_CONFIRMAR_TRAMITE = (By.XPATH, "//button[contains(text(), 'Confirmar')]")
 
     # =========================================================================
+    # NUEVO MÉTODO INTERNO: Clic Seguro Antisolas / Antianimación
+    # =========================================================================
+    def hacer_clic_seguro(self, locator, timeout=10):
+        """
+        Garantiza la interacción efectiva en layouts complejos de Material-UI.
+        Espera dinámicamente a que el elemento correcto esté visible entre posibles 
+        duplicados ocultos por pestañas y gestiona la intercepción de clics.
+        """
+        try:
+            # Esperamos de forma iterativa hasta que aparezca un elemento coincidente que esté visible
+            elemento_visible = WebDriverWait(self.driver, timeout).until(
+                lambda driver: next((el for el in driver.find_elements(*locator) if el.is_displayed()), None)
+            )
+            
+            try:
+                elemento_visible.click()
+            except Exception:
+                # Fallback por JS si la animación del modal o un backdrop bloquea temporalmente el hilo principal
+                self.driver.execute_script("arguments[0].click();", elemento_visible)
+            return
+            
+        except Exception:
+            # Si el filtrado dinámico falla por completo, delega al comportamiento base estructurado
+            self.hacer_clic(locator)
+
+    # =========================================================================
     # MÉTODOS DE INTERACCIÓN (Acciones de negocio / Keywords)
     # =========================================================================
 
@@ -81,33 +109,33 @@ class InventarioPage(BasePage):
         self.escribir(self.BUSCADOR_TEXTO, texto)
 
     def filtrar_con_filtros_avanzados(self, departamento=None, municipio=None, distrito=None, rubro=None, clasificacion=None):
-        """Abre el modal de filtros y combina dropdowns y chips seleccionables."""
-        self.hacer_clic(self.BOTON_ABRIR_FILTROS)
+        """Abre el modal de filtros y combina dropdowns y chips utilizando clics seguros."""
+        self.hacer_clic_seguro(self.BOTON_ABRIR_FILTROS)
         
         if departamento:
-            self.hacer_clic(self.COMBO_DEPARTAMENTO)
+            self.hacer_clic_seguro(self.COMBO_DEPARTAMENTO)
             OPCION_DEPTO = (By.XPATH, f"//li[contains(text(), '{departamento}') or contains(., '{departamento}')]")
-            self.hacer_clic(OPCION_DEPTO)
+            self.hacer_clic_seguro(OPCION_DEPTO)
 
         if municipio:
-            self.hacer_clic(self.COMBO_MUNICIPIO)
+            self.hacer_clic_seguro(self.COMBO_MUNICIPIO)
             OPCION_MUNI = (By.XPATH, f"//li[contains(text(), '{municipio}') or contains(., '{municipio}')]")
-            self.hacer_clic(OPCION_MUNI)
+            self.hacer_clic_seguro(OPCION_MUNI)
             
         if distrito:
-            self.hacer_clic(self.COMBO_DISTRITO)
+            self.hacer_clic_seguro(self.COMBO_DISTRITO)
             OPCION_DIST = (By.XPATH, f"//li[contains(text(), '{distrito}') or contains(., '{distrito}')]")
-            self.hacer_clic(OPCION_DIST)
+            self.hacer_clic_seguro(OPCION_DIST)
             
         if rubro:
-            CHIP_RUBRO = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and text()='{rubro}']")
-            self.hacer_clic(CHIP_RUBRO)
+            CHIP_RUBRO = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and (text()='{rubro}' or contains(., '{rubro}'))]")
+            self.hacer_clic_seguro(CHIP_RUBRO)
             
         if clasificacion:
-            CHIP_CLASIFICACION = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and text()='{clasificacion}']")
-            self.hacer_clic(CHIP_CLASIFICACION)
+            CHIP_CLASIFICACION = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and (text()='{clasificacion}' or contains(., '{clasificacion}'))]")
+            self.hacer_clic_seguro(CHIP_CLASIFICACION)
             
-        self.hacer_clic(self.BOTON_APLICAR_FILTROS)
+        self.hacer_clic_seguro(self.BOTON_APLICAR_FILTROS)
 
     def esperar_presencia_de_texto(self, texto_esperado: str, timeout=10) -> bool:
         """Detiene la prueba hasta que el texto del resultado aparezca en el DOM."""
