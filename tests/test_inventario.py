@@ -1,4 +1,5 @@
 import pytest
+import time
 from pages.inventario_page import InventarioPage
 
 # URL CONFIRMADA: Apunta estrictamente al ambiente de desarrollo (develop)
@@ -8,17 +9,38 @@ URL_BASE = "https://develop.corsatur.julasoft.com/"
 def test_visualizacion_publica_inventario(driver):
     """
     Caso de Uso: 002 - HU001 (Ver Inventario Turístico)
-    Objetivo: Validar que un usuario anónimo (Público) puede ingresar al portal
-              y visualizar las solapas principales del inventario.
+    Objetivo: Validar que un usuario anónimo (Público) puede ingresar al portal,
+              visualizar las solapas principales, acceder al detalle del primer registro
+              para verificar etiquetas informativas clave y regresar exitosamente a la grilla.
     """
     inventario = InventarioPage(driver)
     inventario.abrir_url(URL_BASE)
     inventario.hacer_clic(inventario.BOTON_CONSULTAR_INVENTARIO)
     
+    # 1. Validación inicial de solapas en la grilla principal
     assert inventario.encontrar_elemento(inventario.TAB_EMPRESAS).is_displayed(), \
         "La solapa de 'Empresas' no es visible en la vista pública."
     assert inventario.encontrar_elemento(inventario.TAB_ATRACTIVOS).is_displayed(), \
         "La solapa de 'Atractivos' no es visible en la vista pública."
+
+    # 2. MEJORA DE COBERTURA: Navegación interna al detalle de un registro sin filtros previos
+    inventario.ver_primer_detalle()
+    
+    # Validación estricta de la presencia de los bloques de información requeridos
+    assert inventario.esperar_presencia_de_texto("Ubicación", timeout=10), \
+        "Fallo en la vista pública: La etiqueta de sección 'Ubicación' no se renderizó en el detalle."
+    
+    texto_interno = inventario.obtener_texto_resultados()
+    assert "Establecimiento" in texto_interno or "Datos" in texto_interno, \
+        "Fallo de consistencia: No se visualizan las etiquetas de identificación del establecimiento en el detalle público."
+
+    # 3. Flujo de retorno: Validación del botón Volver
+    inventario.volver_a_grilla()
+    
+    # Confirmamos que el estado del DOM regresó a la grilla interactiva original
+    assert inventario.esperar_presencia_de_texto("Consultar inventario", timeout=5) or \
+           inventario.encontrar_elemento(inventario.TAB_EMPRESAS).is_displayed(), \
+        "Fallo en la navegación: El botón Volver no restituyó la grilla principal de resultados."
 
 
 @pytest.mark.sanity
@@ -80,26 +102,34 @@ def test_filtrar_por_ubicacion_y_categoria_valida(driver):
 def test_ver_detalle_empresa_transporte(driver):
     """
     Caso de Uso: 002 - HU001
-    Objetivo: Validar que al hacer clic en el ícono de 'Ver detalle' de una empresa 
-              filtrada por el rubro 'Transporte', se abra la vista detallada y 
-              se verifique que la información obligatoria del rubro sea correcta.
+    Objetivo: Validar que al filtrar por el rubro 'Transporte', clasificación 'Transporte terrestre turístico'
+              y la ubicación exacta en Chalatenango, se listen los resultados correspondientes en la grilla,
+              se pueda acceder al detalle mediante el ícono del ojo y se verifique la información interna.
     """
     inventario = InventarioPage(driver)
     inventario.abrir_url(URL_BASE)
     inventario.hacer_clic(inventario.BOTON_CONSULTAR_INVENTARIO)
     
-    inventario.filtrar_con_filtros_avanzados(rubro="Transporte")
+    inventario.filtrar_con_filtros_avanzados(
+        rubro="Transporte",
+        clasificacion="Transporte terrestre turístico",
+        departamento="Chalatenango",
+        municipio="Chalatenango Centro",
+        distrito="Tejutla"
+    )
     
-    assert inventario.esperar_presencia_de_texto("Transporte", timeout=10), \
-        "Fallo previo: No se encontraron empresas con el rubro 'Transporte' en la grilla principal."
+    assert inventario.esperar_presencia_de_texto("Transporte terrestre turístico", timeout=10), \
+        "Fallo previo: No se renderizaron filas para la combinación de transporte terrestre en Chalatenango."
     
     inventario.ver_primer_detalle()
     
-    detalle_abierto_con_exito = inventario.esperar_presencia_de_texto("Transporte", timeout=12)
-    assert detalle_abierto_con_exito, \
-        "Fallo en la aserción: Se abrió el detalle de la empresa pero no se visualiza el rubro mandatorio 'Transporte'."
+    assert inventario.esperar_presencia_de_texto("Transporte", timeout=12), \
+        "Fallo en la verificación: El rubro 'Transporte' no está visible en el detalle de la empresa."
         
-    print("¡Prueba de visualización de detalles de transporte aprobada con éxito!")
+    assert inventario.esperar_presencia_de_texto("Transporte terrestre turístico", timeout=5), \
+        "Fallo en la verificación: La clasificación 'Transporte terrestre turístico' no se visualiza en el detalle."
+        
+    print("¡Prueba de flujo completo de grilla y detalle de transporte terrestre aprobada con éxito!")
 
 
 @pytest.mark.regression
@@ -115,6 +145,13 @@ def test_filtrar_atractivos_por_ubicacion_y_categoria(driver):
     
     # Cambiamos a la solapa de Atractivos
     inventario.hacer_clic(inventario.TAB_ATRACTIVOS)
+    
+    assert inventario.esperar_presencia_de_texto("Atractivos", timeout=10), \
+        "La solapa de Atractivos no terminó de cargar visualmente."
+    
+    # Pausa de estabilización necesaria para evitar la carrera de diseño (race condition) 
+    # de Material-UI al interactuar directamente con los combos sin pasar por chips previos.
+    time.sleep(1.5)
     
     depto_atractivo = "San Salvador"
     muni_atractivo = "San Salvador Centro"
@@ -146,7 +183,6 @@ def test_filtrar_por_ubicacion_y_rubro_con_acentos(driver):
     inventario.abrir_url(URL_BASE)
     inventario.hacer_clic(inventario.BOTON_CONSULTAR_INVENTARIO)
     
-    # Set de datos con acentos tipográficos rigurosos pertenecientes al catálogo estándar
     depto_con_acento = "Ahuachapán"
     rubro_con_acento = "Alimentación"
     
@@ -155,7 +191,6 @@ def test_filtrar_por_ubicacion_y_rubro_con_acentos(driver):
         rubro=rubro_con_acento
     )
     
-    # Esperamos que los resultados rendericen el departamento o un indicador del filtro aplicado
     se_cargo_contenido = inventario.esperar_presencia_de_texto(depto_con_acento, timeout=10)
     assert se_cargo_contenido, \
         f"Fallo con acentos: El texto '{depto_con_acento}' no se visualiza en la grilla de resultados de develop."
@@ -164,4 +199,4 @@ def test_filtrar_por_ubicacion_y_rubro_con_acentos(driver):
     assert rubro_con_acento.lower() in texto_pantalla, \
         f"El rubro '{rubro_con_acento}' no fue encontrado en los resultados textuales de la pantalla."
         
-    print("¡Filtro avanzado complejo con manejo de acentos aprobado de forma exitosa!")
+    print("¡Filtro avanzado complejo con manejo de acentos approved de forma exitosa!")

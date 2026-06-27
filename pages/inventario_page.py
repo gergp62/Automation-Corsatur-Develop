@@ -1,8 +1,6 @@
-import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException
 from .base_page import BasePage
 
 class InventarioPage(BasePage):
@@ -40,15 +38,16 @@ class InventarioPage(BasePage):
     # --- Acciones de Grilla / Home ---
     BOTON_REGISTRAR_EMPRESA = (By.XPATH, "//button[contains(text(), 'Agregar empresa') or contains(text(), 'Registrar empresa')]")
     
-    # Localizador todoterreno para el botón de detalles
-    BOTON_VER_DETALLE_PRIMERO = (By.XPATH, "(//button[contains(@class, 'MuiButton-root') or contains(@class, 'MuiIconButton-root')][contains(., 'Ver') or contains(., 'ver') or contains(@aria-label, 'Ver') or contains(@aria-label, 'ver') or contains(@title, 'Ver') or contains(@title, 'ver')])[1]")
+    # Localizador optimizado relativo para capturar el botón de detalle (ojo) en la celda 6 de la primera fila
+    BOTON_VER_DETALLE_TABLA = (By.XPATH, "//table/tbody/tr[1]/td[6]/button")
+    BOTON_VOLVER = (By.XPATH, "//button[contains(text(), 'Volver') or contains(., 'Volver')]")
     
     # --- Formulario de Registro: 1) Personería ---
     RADIO_PERSONERIA_JURIDICA = (By.XPATH, "//input[@value='Jurídica']")
     RADIO_PERSONERIA_SAS = (By.XPATH, "//input[@value='SAS']")
     RADIO_PERSONERIA_NATURAL = (By.XPATH, "//input[@value='Natural']")
     
-    # --- Formulario de Registro: 2) Información General ---
+    # --- Formulario de Registro: 2) Information General ---
     TXT_NOMBRE_COMERCIAL = (By.NAME, "nombreComercial")
     TXT_ANIO_OPERACIONES = (By.NAME, "anioOperaciones")
     SELECT_TIPO_RECURSO = (By.NAME, "tipoRecurso")
@@ -75,43 +74,47 @@ class InventarioPage(BasePage):
     BOTON_CONFIRMAR_TRAMITE = (By.XPATH, "//button[contains(text(), 'Confirmar')]")
 
     # =========================================================================
-    # NUEVO MÉTODO INTERNO: Clic Seguro Antisolas / Antianimación
+    # MÉTODOS DE INTERACCIÓN (Acciones de negocio / Keywords)
     # =========================================================================
+
     def hacer_clic_seguro(self, locator, timeout=10):
         """
         Garantiza la interacción efectiva en layouts complejos de Material-UI.
-        Espera dinámicamente a que el elemento correcto esté visible entre posibles 
-        duplicados ocultos por pestañas y gestiona la intercepción de clics.
+        Espera dinámicamente a que aparezca la instancia correcta que esté visible
+        en la pantalla activa y ejecuta el clic directamente sobre ella.
         """
         try:
-            # Esperamos de forma iterativa hasta que aparezca un elemento coincidente que esté visible
             elemento_visible = WebDriverWait(self.driver, timeout).until(
-                lambda driver: next((el for el in driver.find_elements(*locator) if el.is_displayed()), None)
+                lambda driver: next((el for el in driver.find_elements(*locator) if el.is_displayed()), None),
+                message=f"No se encontró ninguna instancia visible para el localizador: {locator}"
             )
-            
+            elemento_visible.click()
+        except Exception as e:
             try:
-                elemento_visible.click()
+                el = next((el for el in self.driver.find_elements(*locator) if el.is_displayed()), None)
+                if el:
+                    self.driver.execute_script("arguments[0].click();", el)
+                else:
+                    raise e
             except Exception:
-                # Fallback por JS si la animación del modal o un backdrop bloquea temporalmente el hilo principal
-                self.driver.execute_script("arguments[0].click();", elemento_visible)
-            return
-            
-        except Exception:
-            # Si el filtrado dinámico falla por completo, delega al comportamiento base estructurado
-            self.hacer_clic(locator)
-
-    # =========================================================================
-    # MÉTODOS DE INTERACCIÓN (Acciones de negocio / Keywords)
-    # =========================================================================
+                raise e
 
     def aplicar_busqueda_rapida(self, texto: str):
         """Ingresa el texto en el buscador principal para filtrado dinámico."""
         self.escribir(self.BUSCADOR_TEXTO, texto)
 
     def filtrar_con_filtros_avanzados(self, departamento=None, municipio=None, distrito=None, rubro=None, clasificacion=None):
-        """Abre el modal de filtros y combina dropdowns y chips utilizando clics seguros."""
+        """Abre el modal de filtros utilizando aislamiento y clics seguros por solapa."""
         self.hacer_clic_seguro(self.BOTON_ABRIR_FILTROS)
         
+        if rubro:
+            CHIP_RUBRO = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and (text()='{rubro}' or contains(., '{rubro}'))]")
+            self.hacer_clic_seguro(CHIP_RUBRO)
+            
+        if clasificacion:
+            CHIP_CLASIFICACION = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and (text()='{clasificacion}' or contains(., '{clasificacion}'))]")
+            self.hacer_clic_seguro(CHIP_CLASIFICACION)
+
         if departamento:
             self.hacer_clic_seguro(self.COMBO_DEPARTAMENTO)
             OPCION_DEPTO = (By.XPATH, f"//li[contains(text(), '{departamento}') or contains(., '{departamento}')]")
@@ -126,14 +129,6 @@ class InventarioPage(BasePage):
             self.hacer_clic_seguro(self.COMBO_DISTRITO)
             OPCION_DIST = (By.XPATH, f"//li[contains(text(), '{distrito}') or contains(., '{distrito}')]")
             self.hacer_clic_seguro(OPCION_DIST)
-            
-        if rubro:
-            CHIP_RUBRO = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and (text()='{rubro}' or contains(., '{rubro}'))]")
-            self.hacer_clic_seguro(CHIP_RUBRO)
-            
-        if clasificacion:
-            CHIP_CLASIFICACION = (By.XPATH, f"//span[contains(@class, 'MuiChip-label') and (text()='{clasificacion}' or contains(., '{clasificacion}'))]")
-            self.hacer_clic_seguro(CHIP_CLASIFICACION)
             
         self.hacer_clic_seguro(self.BOTON_APLICAR_FILTROS)
 
@@ -152,8 +147,12 @@ class InventarioPage(BasePage):
         return self.driver.find_element(*self.CUERPO_PAGINA).text
 
     def ver_primer_detalle(self):
-        """Hace clic en el botón o ícono de 'Ver detalle' del primer registro del listado."""
-        self.hacer_clic(self.BOTON_VER_DETALLE_PRIMERO)
+        """Hace clic en el botón de 'Ver detalle' (ícono del ojo) de la primera fila de la tabla."""
+        self.hacer_clic_seguro(self.BOTON_VER_DETALLE_TABLA)
+
+    def volver_a_grilla(self):
+        """Regresa a la grilla principal haciendo clic en el botón Volver desde la pantalla de detalle."""
+        self.hacer_clic_seguro(self.BOTON_VOLVER)
 
     def iniciar_registro_empresa(self):
         self.hacer_clic(self.BOTON_REGISTRAR_EMPRESA)
